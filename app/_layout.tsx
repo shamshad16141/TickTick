@@ -5,15 +5,16 @@ export default function RootLayout() {
     <Drawer
       screenOptions={{
         headerShown: false,
-        drawerStyle: {
-          backgroundColor: "#020617",
-        },
-        drawerActiveTintColor: "#3b82f6",
-        drawerInactiveTintColor: "#94a3b8",
+        drawerType: 'slide',
+        overlayColor: 'rgba(0,0,0,0.3)',
       }}
     >
+      {/* Tabs as main screen */}
       <Drawer.Screen name="(tabs)" options={{ title: "Home" }} />
+
+      {/* Extra screens */}
       <Drawer.Screen name="focus" options={{ title: "Focus Mode" }} />
+      <Drawer.Screen name="settings" options={{ title: "Settings" }} />
     </Drawer>
   );
 }
