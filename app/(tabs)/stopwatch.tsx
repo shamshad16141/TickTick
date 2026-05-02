@@ -1,20 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRef, useState } from 'react';
 import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    useWindowDimensions,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { FlatList, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -203,7 +202,7 @@ const styles = StyleSheet.create({
   mainBtn:  { width: 76, height: 76, borderRadius: 38, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   mainBtnLandscape: { width: 60, height: 60, borderRadius: 30 },
   iconBtn:  { width: 50, height: 50, borderRadius: 25, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  lapList:  { width: '88%', alignSelf: 'center' },
+  lapList:  { width: '88%', alignSelf: 'center', flex: 1 },
   lapHeader:{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', paddingBottom: 10, marginBottom: 4, borderBottomWidth: 1 },
   lapRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
   lapNum:   { fontSize: 13 },
