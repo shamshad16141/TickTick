@@ -1,290 +1,226 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { useTheme } from '../../context/ThemeContext';
 
-const { width } = Dimensions.get('window');
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const PRESETS = [1, 5, 10, 25];
 
 export default function Timer() {
-  const [seconds, setSeconds] = useState(0);
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+
+  const { isDark, toggleDark, animatedBg, textColor, subColor, pillBg, pillActiveBg, inputBg, inputBorder } = useTheme();
+
+  const [seconds, setSeconds] = useState(60);
   const [inputMin, setInputMin] = useState(1);
   const [customMin, setCustomMin] = useState('1');
   const [running, setRunning] = useState(false);
 
-  useEffect(() => {
-    let interval: any;
+  const startScale = useSharedValue(1);
+  const resetScale = useSharedValue(1);
+  const intervalRef = useRef<any>(null);
 
+  useEffect(() => {
     if (running && seconds > 0) {
-      interval = setInterval(() => {
-        setSeconds((prev) => prev - 1);
+      intervalRef.current = setInterval(() => {
+        setSeconds((prev) => {
+          if (prev <= 1) { setRunning(false); return 0; }
+          return prev - 1;
+        });
       }, 1000);
     }
-
-    return () => clearInterval(interval);
-  }, [running, seconds]);
+    return () => clearInterval(intervalRef.current);
+  }, [running]);
 
   function formatTime(sec: number) {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return { m: String(m).padStart(2, '0'), s: String(s).padStart(2, '0') };
   }
 
-  function handleStart() {
-    if (seconds === 0) {
-      setSeconds(inputMin * 60);
-    }
-    setRunning(true);
-  }
-
-  function handleStop() {
-    setRunning(false);
+  function handleStartStop() {
+    if (seconds === 0) { setSeconds(inputMin * 60); setRunning(true); return; }
+    setRunning((r) => !r);
   }
 
   function handleReset() {
+    clearInterval(intervalRef.current);
     setRunning(false);
     setSeconds(inputMin * 60);
   }
 
-  function handleApplyCustom() {
-    const parsed = Number.parseInt(customMin, 10);
-    if (Number.isNaN(parsed)) return;
-
-    const safeMin = Math.min(Math.max(parsed, 1), 999);
-    setInputMin(safeMin);
-    setCustomMin(String(safeMin));
-    setSeconds(safeMin * 60);
+  function handlePreset(min: number) {
+    clearInterval(intervalRef.current);
     setRunning(false);
+    setInputMin(min);
+    setCustomMin(String(min));
+    setSeconds(min * 60);
   }
 
-  return (
-    <View style={styles.container}>
-      {/* Background */}
-      <LinearGradient
-        colors={['#7dd3fc', '#3b82f6', '#1e3a8a']}
-        style={styles.gradient}
-      />
+  function handleApplyCustom() {
+    const parsed = parseInt(customMin, 10);
+    if (isNaN(parsed)) return;
+    const safe = Math.min(Math.max(parsed, 1), 999);
+    handlePreset(safe);
+    setCustomMin(String(safe));
+  }
 
-      {/* Timer */}
-      <Text style={styles.time}>{formatTime(seconds)}</Text>
+  const doubleTap = Gesture.Tap().numberOfTaps(2).onStart(() => runOnJS(toggleDark)());
 
-      {/* Quick Presets */}
-      <View style={styles.quickRow}>
-        {[1, 5, 10, 25].map((min) => (
-          <Pressable
-            key={min}
-            onPress={() => {
-              setInputMin(min);
-              setCustomMin(String(min));
-              setSeconds(min * 60);
-              setRunning(false);
-            }}
-            style={({ pressed }) => [
-              styles.quickBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.quickText}>{min}m</Text>
-          </Pressable>
-        ))}
-      </View>
+  const animatedStart = useAnimatedStyle(() => ({ transform: [{ scale: startScale.value }] }));
+  const animatedReset = useAnimatedStyle(() => ({ transform: [{ scale: resetScale.value }] }));
 
-      <View style={styles.customRow}>
-        <TextInput
-          value={customMin}
-          onChangeText={(text) => setCustomMin(text.replace(/[^0-9]/g, ''))}
-          keyboardType="number-pad"
-          maxLength={3}
-          placeholder="Custom min"
-          placeholderTextColor="#94a3b8"
-          style={styles.customInput}
-        />
-        <Pressable
-          onPress={handleApplyCustom}
-          style={({ pressed }) => [
-            styles.customApplyBtn,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.customApplyText}>Apply</Text>
-        </Pressable>
-      </View>
+  const { m, s } = formatTime(seconds);
+  const isDone   = seconds === 0 && !running;
+  const progress = inputMin > 0 ? seconds / (inputMin * 60) : 0;
 
-      <View style={styles.actionsRow}>
-        <Pressable
-          onPress={handleStart}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.startBtn,
-            pressed && styles.actionPressed,
-          ]}
-        >
-          <Text style={styles.actionText}>Start</Text>
-        </Pressable>
+  const startBg        = running ? (isDark ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)') : (isDark ? 'rgba(34,197,94,0.15)' : 'rgba(34,197,94,0.08)');
+  const startBorder    = running ? '#ef4444' : '#22c55e';
+  const startIconColor = running ? '#ef4444' : '#22c55e';
+  const resetBorder    = isDark  ? 'rgba(255,255,255,0.2)'  : 'rgba(30,41,59,0.15)';
 
-        <Pressable
-          onPress={handleStop}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.stopBtn,
-            pressed && styles.actionPressed,
-          ]}
-        >
-          <Text style={styles.actionText}>Stop</Text>
-        </Pressable>
+  const timeFontSize  = isLandscape ? height * 0.26 : width * 0.28;
+  const colonFontSize = isLandscape ? height * 0.20 : width * 0.20;
 
-        <Pressable
-          onPress={handleReset}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.resetBtn,
-            pressed && styles.actionPressed,
-          ]}
-        >
-          <Text style={styles.actionText}>Reset</Text>
-        </Pressable>
-      </View>
-
-      <Text style={styles.statusText}>{running ? 'Running' : 'Paused'}</Text>
+  const TimeDisplay = (
+    <View style={styles.timeContainer}>
+      <Text style={[styles.timeText, { color: textColor, fontSize: timeFontSize }]}>{m}</Text>
+      <Text style={[styles.colon,    { color: subColor,  fontSize: colonFontSize }]}>:</Text>
+      <Text style={[styles.timeText, { color: textColor, fontSize: timeFontSize }]}>{s}</Text>
     </View>
+  );
+
+  const ProgressBar = (
+    <View style={[styles.progressTrack, { backgroundColor: pillBg }]}>
+      <Animated.View style={[styles.progressFill, {
+        width: `${Math.max(progress * 100, 0)}%`,
+        backgroundColor: running ? '#22c55e' : isDark ? '#475569' : '#cbd5e1',
+      }]} />
+    </View>
+  );
+
+  const StatusLabel = (
+    <Text style={[styles.status, { color: subColor }]}>
+      {isDone ? '✓ Done' : running ? 'Running' : 'Paused'}
+    </Text>
+  );
+
+  const PresetPills = (
+    <View style={[styles.presetsRow, isLandscape && styles.presetsRowLandscape]}>
+      {PRESETS.map((min) => (
+        <Pressable key={min} onPress={() => handlePreset(min)}
+          style={[styles.pill, { backgroundColor: inputMin === min ? pillActiveBg : pillBg }]}>
+          <Text style={[styles.pillText, {
+            color: inputMin === min ? textColor : subColor,
+            fontWeight: inputMin === min ? '700' : '400',
+          }]}>{min}m</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  const CustomInput = (
+    <View style={[styles.inputRow, { backgroundColor: inputBg, borderColor: inputBorder },
+      isLandscape && styles.inputRowLandscape]}>
+      <TextInput
+        value={customMin}
+        onChangeText={(t) => setCustomMin(t.replace(/[^0-9]/g, ''))}
+        keyboardType="number-pad" maxLength={3} placeholder="min"
+        placeholderTextColor={subColor}
+        style={[styles.input, { color: textColor }]}
+        returnKeyType="done" onSubmitEditing={handleApplyCustom}
+      />
+      <Text style={[styles.inputUnit, { color: subColor }]}>min</Text>
+      <Pressable onPress={handleApplyCustom} style={[styles.setBtn, { borderColor: inputBorder }]}>
+        <Text style={[styles.setBtnText, { color: textColor }]}>Set</Text>
+      </Pressable>
+    </View>
+  );
+
+  const Controls = (
+    <View style={[styles.controls, isLandscape && styles.controlsLandscape]}>
+      <AnimatedPressable
+        onPressIn={() => { resetScale.value = withTiming(0.9, { duration: 100 }); }}
+        onPressOut={() => { resetScale.value = withSpring(1, { damping: 10, stiffness: 160 }); }}
+        onPress={handleReset}
+        style={[styles.iconBtn, animatedReset, { backgroundColor: pillBg, borderColor: resetBorder }]}
+      >
+        <Ionicons name="refresh" size={22} color={subColor} />
+      </AnimatedPressable>
+
+      <AnimatedPressable
+        onPressIn={() => { startScale.value = withTiming(0.92, { duration: 100 }); }}
+        onPressOut={() => { startScale.value = withSpring(1, { damping: 10, stiffness: 160 }); }}
+        onPress={handleStartStop}
+        style={[styles.mainBtn, animatedStart, { backgroundColor: startBg, borderColor: startBorder },
+          isLandscape && styles.mainBtnLandscape]}
+      >
+        <Ionicons name={running ? 'pause' : 'play'} size={isLandscape ? 24 : 30} color={startIconColor} />
+      </AnimatedPressable>
+
+      <View style={[styles.iconBtn, { opacity: 0 }]} />
+    </View>
+  );
+
+  const Hint = <Text style={[styles.hint, { color: subColor }]}>Double tap to {isDark ? 'light' : 'dark'} mode</Text>;
+
+  return (
+    <GestureDetector gesture={doubleTap}>
+      <Animated.View style={[styles.container, animatedBg, isLandscape && styles.containerLandscape]}>
+        {isLandscape ? (
+          <>
+            <View style={styles.lsLeft}>{TimeDisplay}{ProgressBar}{StatusLabel}{Hint}</View>
+            <View style={styles.lsRight}>{PresetPills}{CustomInput}{Controls}</View>
+          </>
+        ) : (
+          <>{TimeDisplay}{ProgressBar}{StatusLabel}{PresetPills}{CustomInput}{Controls}{Hint}</>
+        )}
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  gradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-
-  time: {
-    fontSize: width * 0.22,
-    color: "#fff",
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-
-  quickRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 26,
-  },
-
-  quickBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-
-  quickText: {
-    color: "#fff",
-    fontSize: 13,
-  },
-
-  pressed: {
-    opacity: 0.82,
-  },
-
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-
-  customRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-    width: '76%',
-    maxWidth: 360,
-  },
-
-  customInput: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#8b93f8',
-    backgroundColor: 'rgba(248,248,253,0.95)',
-    color: '#0f172a',
-    fontSize: 16,
-    fontWeight: '700',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-
-  customApplyBtn: {
-    borderRadius: 14,
-    backgroundColor: '#1f35ff',
-    paddingHorizontal: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  customApplyText: {
-    color: '#f8f8fd',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  actionBtn: {
-    borderRadius: 999,
-    borderWidth: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    minWidth: 94,
-    alignItems: 'center',
-  },
-
-  startBtn: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#22c55e',
-    shadowColor: '#16a34a',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 8,
-  },
-
-  stopBtn: {
-    backgroundColor: '#fee2e2',
-    borderColor: '#ef4444',
-    shadowColor: '#e11d48',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 8,
-  },
-
-  resetBtn: {
-    backgroundColor: '#fef9c3',
-    borderColor: '#facc15',
-    shadowColor: '#ca8a04',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 8,
-  },
-
-  actionPressed: {
-    top: 8,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-
-  actionText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0011ff',
-  },
-
-  statusText: {
-    color: '#dbeafe',
-    fontSize: 14,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
+  container:         { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  containerLandscape:{ flex: 1, flexDirection: 'row', paddingHorizontal: 0 },
+  lsLeft:  { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  lsRight: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  timeContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  timeText: { fontWeight: 'bold', letterSpacing: 2 },
+  colon:    { fontWeight: 'bold', marginHorizontal: 2, marginBottom: 8 },
+  progressTrack: { width: '80%', height: 4, borderRadius: 2, overflow: 'hidden', marginBottom: 10 },
+  progressFill:  { height: '100%', borderRadius: 2 },
+  status: { fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 24 },
+  presetsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  presetsRowLandscape: { marginBottom: 12 },
+  pill:     { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  pillText: { fontSize: 13 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 28, width: '75%', maxWidth: 300, gap: 8 },
+  inputRowLandscape: { marginBottom: 20, width: '85%' },
+  input:    { flex: 1, fontSize: 17, fontWeight: '600', padding: 0 },
+  inputUnit:{ fontSize: 12 },
+  setBtn:   { borderLeftWidth: 1, paddingLeft: 12 },
+  setBtnText:{ fontSize: 13, fontWeight: '600' },
+  controls: { flexDirection: 'row', alignItems: 'center', gap: 24, marginBottom: 20 },
+  controlsLandscape: { marginBottom: 0 },
+  mainBtn:  { width: 72, height: 72, borderRadius: 36, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  mainBtnLandscape: { width: 58, height: 58, borderRadius: 29 },
+  iconBtn:  { width: 48, height: 48, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  hint:     { fontSize: 11, letterSpacing: 0.5, opacity: 0.6, marginTop: 4 },
 });
